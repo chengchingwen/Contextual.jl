@@ -9,30 +9,33 @@ Exploring contextual dispatch implementation in Julia
 
 <details>
 	<summary>utils.jl</summary>
-	```julia
-	using Test
-	macro resultshow(a, val, ex)
-		expr_str = sprint(Base.show_unquoted, ex)
-		expr = Symbol(expr_str)
-		linfo = findfirst("=# ", expr_str)
-		if !isnothing(linfo)
-			expr_str = expr_str[last(linfo)+1:end]
-		end
-		return quote
-			@time $(esc(ex))
-			print($expr_str)
-			print(" = ")
-			$expr = collect($(esc(a)))[]
-			println($expr)
-			@test $expr ≈ $val
-		end
+
+```julia
+using Test
+macro resultshow(a, val, ex)
+	expr_str = sprint(Base.show_unquoted, ex)
+	expr = Symbol(expr_str)
+	linfo = findfirst("=# ", expr_str)
+	if !isnothing(linfo)
+		expr_str = expr_str[last(linfo)+1:end]
 	end
-	```
+	return quote
+		@time $(esc(ex))
+		print($expr_str)
+		print(" = ")
+		$expr = collect($(esc(a)))[]
+		println($expr)
+		@test $expr ≈ $val
+	end
+end
+```
+
 </details>
 
 ```julia
 using Contextual
 using Contextual: withctx, Context
+using CUDA
 
 struct Sin2Cos <: Context end
 
