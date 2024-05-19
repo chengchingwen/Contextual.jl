@@ -3,6 +3,9 @@ uuid = "6c936753-128c-455c-8ad0-9ad0cfa104ed"
 authors = ["chengchingwen <chengchingwen214@gmail.com> and contributors"]
 version = "1.0.0-DEV"
 
+[deps]
+FuncTransforms = "79abecb7-a74d-442d-bb0e-6136fbda6b73"
+
 [weakdeps]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
