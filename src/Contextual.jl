@@ -5,7 +5,7 @@ using Core.Compiler: specialize_method
 using Base.Meta: isexpr
 
 using FuncTransforms
-using FuncTransforms: create_codeinfo, method_by_ftype, lookup_method, walk, resolve
+using FuncTransforms: create_codeinfo, method_by_ftype, lookup_method, walk, resolve, inlineflag!, add_ci_edges!
 
 struct WithCtxGenerator{MT<:Union{Nothing, MethodTable, Vector{MethodTable}}}
     overlay_tables::MT
@@ -34,7 +34,8 @@ function (g::WithCtxGenerator)(world, source, self, ctx, func, args)
         witharg = getparg(ft.fi, 1)
         ctxarg = getparg(ft.fi, 2)
     end
-    for (ssavalue, stmt, flag, loc) in FuncInfoIter(ft.fi, 1)
+    for (ssavalue, code) in FuncInfoIter(ft.fi, 1)
+        stmt = code.stmt
         if descend && isexpr(stmt, :call)
             callee = resolve(stmt.args[1])
             if callee isa Core.Builtin || callee isa Type{Core.TypeVar}
@@ -47,13 +48,16 @@ function (g::WithCtxGenerator)(world, source, self, ctx, func, args)
             else
                 newstmt = Expr(:call, witharg, ctxarg, stmt.args...)
             end
-            flag |= FuncTransforms.IR_FLAG_INLINE
-            replacestmt!(ft.fi, ssavalue, newstmt, flag, loc)
+            inlineflag!(code)
+            code.stmt = newstmt
         end
     end
     ci = toCodeInfo(ft; inline = false)
-    mt_edges = Core.Compiler.vect(typeof(ctxcall).name.mt, Tuple{typeof(ctxcall), ctx, func, Vararg{Any}})
-    ci.edges = mt_edges
+    @static if VERSION < v"1.12.0-DEV.1531"
+        add_ci_edges!(ci, typeof(ctxcall).name.mt, Tuple{typeof(ctxcall), ctx, func, Vararg{Any}})
+    else
+        add_ci_edges!(ci, Tuple{typeof(ctxcall), ctx, func, Vararg{Any}}, typeof(ctxcall).name.mt)
+    end
     return ci
 end
 

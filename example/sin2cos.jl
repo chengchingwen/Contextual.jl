@@ -1,19 +1,20 @@
 using Test
 macro resultshow(a, val, ex)
-	expr_str = sprint(Base.show_unquoted, ex)
-	expr = Symbol(expr_str)
-	linfo = findfirst("=# ", expr_str)
-	if !isnothing(linfo)
-		expr_str = expr_str[last(linfo)+1:end]
-	end
-	return quote
-		@time $(esc(ex))
-		print($expr_str)
-		print(" = ")
-		$expr = collect($(esc(a)))[]
-		println($expr)
-		@test $expr ≈ $val
-	end
+    expr_str = sprint(Base.show_unquoted, ex)
+    expr = Symbol(expr_str)
+    linfo = findfirst("=# ", expr_str)
+    if !isnothing(linfo)
+	expr_str = expr_str[last(linfo)+1:end]
+    end
+    return quote
+        @time $(string("1st ", expr_str)) $(esc(ex))
+	$expr = collect($(esc(a)))[]
+        @time $(string("2nd ", expr_str)) $(esc(ex))
+	print($expr_str)
+	print(" = ")
+	println($expr)
+	@test $expr ≈ $val
+    end
 end
 
 using Contextual
@@ -23,9 +24,9 @@ using CUDA
 struct Sin2Cos <: Context end
 
 foo(x) = sin(2 * x) / 2
-bar(a, x) = (a[1] = foo(x); return)
+bar(a, x) = (@inbounds a[1] = foo(x); return)
 baz(a, x) = (withctx(Sin2Cos(), bar, a, x); return)
-qux(a, x) = (a[1] = withctx(Sin2Cos(), sin, x); return)
+qux(a, x) = (@inbounds a[1] = withctx(Sin2Cos(), sin, x); return)
 
 a_cpu = Float32[0]
 a_gpu = cu(a_cpu)
@@ -58,9 +59,20 @@ println("\nredefine:")
 @resultshow a_cpu tan(0.3) qux(a_cpu, 0.3)
 @resultshow a_gpu tan(0.3) @cuda(qux(a_gpu, 0.3))
 
-Base.delete_method(methods(Contextual.ctxcall, Tuple{Sin2Cos, typeof(sin), Any})[1])
-
-println("\ndelete:")
+Base.delete_method(first(methods(Contextual.ctxcall, Tuple{Sin2Cos, typeof(sin), Any})))
+@static if VERSION < v"1.12.0-DEV"
+    println("\ndelete:")
+else
+    println("\ndelete0:")
+    @resultshow a_cpu cos(2 * 0.7) / 2 withctx(Sin2Cos(), bar, a_cpu, 0.7)
+    @resultshow a_gpu cos(2 * 0.7) / 2 @cuda(withctx(Sin2Cos(), bar, a_gpu, 0.7))
+    @resultshow a_cpu cos(2 * 0.7) / 2 baz(a_cpu, 0.7)
+    @resultshow a_gpu cos(2 * 0.7) / 2 @cuda(baz(a_gpu, 0.7))
+    @resultshow a_cpu cos(0.3) qux(a_cpu, 0.3)
+    @resultshow a_gpu cos(0.3) @cuda(qux(a_gpu, 0.3))
+    Base.delete_method(first(methods(Contextual.ctxcall, Tuple{Sin2Cos, typeof(sin), Any})))
+    println("\ndelete1:")
+end
 @resultshow a_cpu sin(2 * 0.7) / 2 withctx(Sin2Cos(), bar, a_cpu, 0.7)
 @resultshow a_gpu sin(2 * 0.7) / 2 @cuda(withctx(Sin2Cos(), bar, a_gpu, 0.7))
 @resultshow a_cpu sin(2 * 0.7) / 2 baz(a_cpu, 0.7)
